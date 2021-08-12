@@ -1,0 +1,535 @@
+/**********************************************************************/
+
+/*http://www.stanford.edu/~doubleh/eco273/sa.txt*/
+
+/*
+THE SIMULATED ANNEALING PROGRAM FOLLOWS:
+*/
+
+/**********************************************************************/
+
+ proc (8) = sa(&fcn,x,max,rt,eps,ns,nt,neps,maxevl,lb,ub,c,iprint,t,vm);
+/**
+
+GAUSS version of Bill Goffe's simulated annealing program for global
+optimization, written by E.G.Tsionas.
+
+  Date: 9/4/95.
+
+  Synopsis:
+  This routine implements the continuous simulated annealing global
+  optimization algorithm described in Corana et al.'s article
+  "Minimizing Multimodal Functions of Continuous Variables with the
+  "Simulated Annealing" Algorithm" in the September 1987 (vol. 13,
+  no. 3, pp. 262-280) issue of the ACM Transactions on Mathematical
+  Software.
+
+  A very quick (perhaps too quick) overview of SA:
+     SA tries to find the global optimum of an N dimensional function.
+  It moves both up and downhill and as the optimization process
+  proceeds, it focuses on the most promising area.
+     To start, it randomly chooses a trial point within the step length
+  VM (a vector of length N) of the user selected starting point. The
+  function is evaluated at this trial point and its value is compared
+  to its value at the initial point.
+     In a maximization problem, all uphill moves are accepted and the
+  algorithm continues from that trial point. Downhill moves may be
+  accepted; the decision is made by the Metropolis criteria. It uses T
+  (temperature) and the size of the downhill move in a probabilistic
+  manner. The smaller T and the size of the downhill move are, the more
+  likely that move will be accepted. If the trial is accepted, the
+  algorithm moves on from that point. If it is rejected, another point
+  is chosen instead for a trial evaluation.
+     Each element of VM periodically adjusted so that half of all
+  function evaluations in that direction are accepted.
+     A fall in T is imposed upon the system with the RT variable by
+  T(i+1) = RT*T(i) where i is the ith iteration. Thus, as T declines,
+  downhill moves are less likely to be accepted and the percentage of
+  rejections rise. Given the scheme for the selection for VM, VM falls.
+  Thus, as T declines, VM falls and SA focuses upon the most promising
+  area for optimization.
+
+  The importance of the parameter T:
+     The parameter T is crucial in using SA successfully. It influences
+  VM, the step length over which the algorithm searches for optima. For
+  a small intial T, the step length may be too small; thus not enough
+  of the function might be evaluated to find the global optima. The user
+  should carefully examine VM in the intermediate output (set IPRINT =
+  1) to make sure that VM is appropriate. The relationship between the
+  initial temperature and the resulting step length is function
+  dependent.
+     To determine the starting temperature that is consistent with
+  optimizing a function, it is worthwhile to run a trial run first. Set
+  RT = 1.5 and T = 1.0. With RT > 1.0, the temperature increases and VM
+  rises as well. Then select the T that produces a large enough VM.
+
+  For modifications to the algorithm and many details on its use,
+  (particularly for econometric applications) see Goffe, Ferrier
+  and Rogers, "Global Optimization of Statistical Functions with
+  Simulated Annealing," Journal of Econometrics, vol. 60, no. 1/2,
+  Jan./Feb. 1994, pp. 65-100.
+  For more information, contact
+              Bill Goffe
+              Department of Economics and International Business
+              University of Southern Mississippi
+              Hattiesburg, MS  39506-5072
+              (601) 266-4484 (office)
+              (601) 266-4920 (fax)
+              bgoffe@whale.st.usm.edu (Internet)
+  For information regarding the present GAUSS version, contact
+              E.G. Tsionas
+              Department of Economics
+              University of Toronto
+              150 St George Str.
+              Toronto Ontario M5S 1A1
+              Canada
+              (416) 978 4188 (office)
+              (416) 978 6713 (fax)
+              etsionas@epas.utoronto.ca (Internet)
+
+  As far as possible, the parameters here have the same name as in
+  the description of the algorithm on pp. 266-8 of Corana et al.
+
+  In this description (N) denotes an array of length n.
+
+  Use:
+  {xopt, fopt, nacc, nfcnev, nobds, ier, t, vm} =
+     sa (&fcn,x,max,rt,eps,ns,nt,neps,maxevl,lb,ub,c,iprint,t,vm);
+
+  Input Parameters:
+    Note: The suggested values generally come from Corana et al. To
+          drastically reduce runtime, see Goffe et al., pp. 90-1 for
+          suggestions on choosing the appropriate RT and NT.
+    &fcn - Name of a Gauss procedure which returns the value of function
+          to be optimized.
+    x - The starting values for the variables of the function to be
+        optimized. (N)
+    max - Denotes whether the function should be maximized or
+          minimized. A value =1 denotes maximization while a
+          value =0 denotes minimization. Intermediate output (see IPRINT)
+          takes this into account.
+    rt - The temperature reduction factor. The value suggested by
+         Corana et al. is .85. See Goffe et al. for more advice.
+    eps - Error tolerance for termination. If the final function
+          values from the last neps temperatures differ from the
+          corresponding value at the current temperature by less than
+          EPS and the final function value at the current temperature
+          differs from the current optimal function value by less than
+          EPS, execution terminates and IER = 0 is returned.
+    ns - Number of cycles. After NS*N function evaluations, each
+         element of VM is adjusted so that approximately half of
+         all function evaluations are accepted. The suggested value
+         is 20.
+    nt - Number of iterations before temperature reduction. After
+         NT*NS*N function evaluations, temperature (T) is changed
+         by the factor RT. Value suggested by Corana et al. is
+         max(100, 5*n). See Goffe et al. for further advice.
+    neps - Number of final function values used to decide upon termi-
+           nation. See EPS. Suggested value is 4.
+    maxevl - The maximum number of function evaluations. If it is
+             exceeded, IER = 1.
+    lb - The lower bound for the allowable solution variables. (N)
+    ub - The upper bound for the allowable solution variables. (N)
+         If the algorithm chooses X(I) < LB(I) or X(I) > UB(I),
+         I = 1, N, a point is from inside is randomly selected. This
+         This focuses the algorithm on the region inside UB and LB.
+         Unless the user wishes to concentrate the search to a par-
+         ticular region, UB and LB should be set to very large positive
+         and negative values, respectively. Note that the starting
+         vector X should be inside this region. Also note that LB and
+         UB are fixed in position, while VM is centered on the last
+         accepted trial set of variables that optimizes the function.
+    c - Vector that controls the step length adjustment. The suggested
+        value for all elements is 2.0. (N)
+    iprint - controls printing inside SA.
+             Values: 0 - Nothing printed.
+                     1 - Function value for the starting value and
+                         summary results before each temperature
+                         reduction. This includes the optimal
+                         function value found so far, the total
+                         number of moves (broken up into uphill,
+                         downhill, accepted and rejected), the
+                         number of out of bounds trials, the
+                         number of new optima found at this
+                         temperature, the current optimal X and
+                         the step length VM. Note that there are
+                         N*NS*NT function evalutations before each
+                         temperature reduction. Finally, notice is
+                         is also given upon achieveing the termination
+                         criteria.
+                     2 - Each new step length (VM), the current optimal
+                         X (XOPT) and the current trial X (X). This
+                         gives the user some idea about how far X
+                         strays from XOPT as well as how VM is adapting
+                        to the function.
+                     3 - Each function evaluation, its acceptance or
+                         rejection and new optima. For many problems,
+                         this option will likely require a small tree
+                         if hard copy is used. This option is best
+                         used to learn about the algorithm. A small
+                         value for MAXEVL is thus recommended when
+                         using IPRINT = 3.
+             Suggested value: 1
+             Note: For a given value of IPRINT, the lower valued
+                   options (other than 0) are utilized.
+ c  Input/Output Parameters:
+    t - On input, the initial temperature. See Goffe et al. for advice.
+        On output, the final temperature.
+    vm - The step length vector. On input it should encompass the
+         region of interest given the starting value X. For point
+         X(I), the next trial point is selected is from X(I) - VM(I)
+         to  X(I) + VM(I). Since VM is adjusted so that about half
+         of all points are accepted, the input value is not very
+         important (i.e. is the value is off, SA adjusts VM to the
+         correct value). (N)
+
+  Output Parameters:
+    xopt - The variables that optimize the function. (N)
+    fopt - The optimal value of the function.
+    nacc - The number of accepted function evaluations.
+    nfcnev - The total number of function evaluations. In a minor
+             point, note that the first evaluation is not used in the
+             core of the algorithm; it simply initializes the
+             algorithm.
+    nobds - The total number of trial function evaluations that
+            would have been out of bounds of LB and UB. Note that
+            a trial point is randomly selected between LB and UB.
+
+    ier - The error return number.
+          Values: 0 - Normal return; termination criteria achieved.
+                  1 - Number of function evaluations (NFCNEV) is
+                      greater than the maximum number (MAXEVL).
+                  2 - The starting value (X) is not inside the
+                      bounds (LB and UB).
+                  3 - The initial temperature is not positive.
+                  99 - Should not be seen; only used internally.
+
+
+    The statement "#include sa" is necessary in the calling program.
+    The random number generator can also be initialized there. For
+    example the statement "rndseed 123;" initializes the seed to 123.
+
+  Required procedures (included):
+    prt1 ... prt10 - Prints intermediate output.
+    fcn - Name of function to be optimized. The form is
+
+            proc fcn(x);
+              local f,......;
+                        ...
+              function code with f = f(x)
+                        ...
+              retp(f);
+            endp;
+
+  Machine Specific Features:
+    1. Watch for under- and overflows in EXPREP. EXPREP replaces the exp()
+       function of GAUSS and is written for the 386 version.
+
+  Note:
+       This version is not completely vectorized.
+
+       You can use this program freely as long as it is for non-commercial,
+       academic purposes and the author is credited. No responsibilities for
+       the program's actual performance can be assumed.
+
+**/
+
+local n, xopt, xp, nacp, nacc, nobds, nfcnev, ier, fstar,
+      f, fopt, nup, nrej, nnew, ndown, lnobds, m, j, h, i,
+      fp, p, pp, ratio, quit, fcn:proc;
+
+n = rows(x);
+xopt = zeros(n,1);
+xp = zeros(n,1);
+nacp = zeros(n,1);
+/**  Set initial values.**/
+
+nacc = 0;
+nobds = 0;
+nfcnev = 0;
+ier = 99;
+xopt = x;
+nacp = zeros(n,1);
+fstar = 1e20*ones(neps,1);
+
+/** If the initial temperature is not positive, notify the user and abort. **/
+
+if (t <= 0.0);
+  print" The initial temperature is not positive. Reset the variable t";
+  ier = 3; stop;
+endif;
+
+/**  If the initial value is out of bounds, notify the user and abort. **/
+
+if (sumc(x.> ub)+ sumc(x.< lb) > 0);
+  print "initial condition out of bounds";
+  ier = 2; stop;
+endif;
+
+/**  Evaluate the function with input x and return value as f. **/
+
+f = fcn(x);
+
+/**
+  If the function is to be minimized, switch the sign of the function.
+  Note that all intermediate and final output switches the sign back
+  to eliminate any possible confusion for the user.
+**/
+
+if (max == 0); f = -f; endif;
+nfcnev = nfcnev + 1;
+fopt = f;
+fstar[1] = f;
+if (iprint > 1); call prt2(max,x,f); endif;
+
+/**
+  Start the main loop. Note that it terminates if (i) the algorithm
+  succesfully optimizes the function or (ii) there are too many
+  function evaluations (more than MAXEVL).
+**/
+
+_100:   nup = 0;
+ nrej = 0;
+ nnew = 0;
+ ndown = 0;
+ lnobds = 0;
+
+      m=1; do while m <= nt;
+         j=1; do while j <= ns;
+            h=1; do while h <= n;
+
+/**  Generate xp, the trial value of x. Note use of vm to choose xp. **/
+
+               i=1; do while i <= n;
+                  if (i == h);
+                     xp[i] = x[i] + (rndu(1,1)*2.- 1.) * vm[i];
+                  else;
+                     xp[i] = x[i];
+                  endif;
+
+/**  If xp is out of bounds, select a point in bounds for the trial. **/
+
+ if((xp[i] < lb[i]) or (xp[i] > ub[i]));
+     xp[i] = lb[i] + (ub[i] - lb[i])*rndu(1,1);
+     lnobds = lnobds + 1;
+     nobds = nobds + 1;
+     if(iprint >= 3); call prt3(max,xp,x,fp,f); endif;
+  endif;
+i = i+1; endo;
+xp[1]=abs(xp[1]); /*xp=xp/(sqrt(xp'*xp)); elie */
+/**  Evaluate the function with the trial point xp and return as fp. **/
+
+fp = fcn(xp);
+if(max == 0); fp = -fp; endif;
+nfcnev = nfcnev + 1;
+if(iprint >= 3); call prt4(max,xp,x,fp,f); endif;
+
+/**  If too many function evaluations occur, terminate the algorithm. **/
+
+if(nfcnev >= maxevl);
+   call prt5();
+   if (max == 0); fopt = -fopt; endif;
+   ier = 1;
+   stop;
+endif;
+
+/**  Accept the new point if the function value increases. **/
+
+if (fp >= f);
+   if(iprint >= 3);
+endif;
+x = xp;
+f = fp;
+nacc = nacc + 1;
+nacp[h] = nacp[h] + 1;
+nup = nup + 1;
+
+/**  If greater than any other point, record as new optimum. **/
+
+if (fp > fopt);
+   xopt = xp;
+   fopt = fp;
+   nnew = nnew + 1;
+endif;
+
+/**
+ If the point is lower, use the Metropolis criteria to decide on
+ acceptance or rejection.
+**/
+
+    else;
+p = exprep((fp - f)/t);
+pp = rndu(1,1);
+
+if (pp < p);
+  x = xp;
+ f = fp;
+ nacc = nacc + 1;
+ nacp[h] = nacp[h] + 1;
+ ndown = ndown + 1;
+else;
+ nrej = nrej + 1;
+endif;
+endif;
+
+h = h+1; endo;
+j = j+1; endo;
+
+/**  Adjust vm so that approximately half of all evaluations are accepted. **/
+
+i=1; do while i <= n;
+   ratio = nacp[i] /ns;
+       if (ratio > .6);
+          vm[i] = vm[i]*(1. + c[i]*(ratio - .6)/.4);
+          elseif (ratio < .4);
+          vm[i] = vm[i]/(1. + c[i]*((.4 - ratio)/.4));
+        endif;
+            if (vm[i] > (ub[i]-lb[i]));
+               vm[i] = ub[i] - lb[i];
+            endif;
+i = i+1; endo;
+vm[1]=abs(vm[1]);
+/*vm=vm/(sqrt(vm'*vm));*/
+
+nacp = zeros(n,1);
+
+m = m+1; endo;
+
+if(iprint >= 1);
+ call prt9(max,t,xopt,vm,fopt,nup,ndown,nrej,lnobds,nnew);
+endif;
+
+/**  Check termination criteria. **/
+
+quit = 0;
+fstar[1] = f;
+if ((fopt - fstar[1]) <= eps); quit = 1; endif;
+if ( sumc(abs(f-fstar) .> eps) > 0 ); quit = 0; endif;
+
+/**  Terminate SA if appropriate. **/
+
+  if (quit);
+     x = xopt;
+     ier = 0;
+     if (max == 0); fopt = -fopt; endif;
+   retp(xopt, fopt, nacc, nfcnev, nobds, ier, t, vm);
+  endif;
+
+/**  If termination criteria are not met, prepare for another loop. **/
+
+t = rt*t;
+i=neps; do while i >= 2;
+  fstar[i] = fstar[i-1];
+i = i-1; endo;
+f = fopt;
+x = xopt;
+
+/**  Loop again. **/
+goto _100;
+endp;
+
+/**********************************************************************/
+
+proc exprep(x);
+/**
+  This function replaces exp to avoid under- and overflows.
+  Note that the maximum and minimum values of
+  exprep are such that they has no effect on the algorithm.
+**/
+
+local e;
+if (x > 709); e = 8.2184e+307;
+   elseif (x < -708); e = 0;
+   else; e = exp(x);
+endif;
+retp(e);
+endp;
+/**********************************************************************/
+
+proc (0) = prt1();
+/**
+  This subroutine prints intermediate output, as does prt2 through
+  prt10. Note that if SA is minimizing the function, the sign of the
+  function value and the directions (up/down) are reversed in all
+  output to correspond with the actual function optimization.
+**/
+
+print "The starting value (x) is outside the bounds";
+print "(lb and ub). execution terminated without any";
+print "optimization. Respecify x, ub or lb so that";
+endp;
+/**********************************************************************/
+
+proc (0) =  prt2(max,x,f);
+print x'~f;
+
+endp;
+/**********************************************************************/
+
+proc (0) =  prt3(max,xp,x,fp,f);
+
+ x'~f;
+endp;
+/**********************************************************************/
+
+proc (0) = prt4(max,xp,x,fp,f);
+ x'~f;
+if (max);
+  xp'~fp;
+ else;
+ print "current f" -f;
+ print "trial x" xp;
+ print "resulting f" -fp;
+endif;
+endp;
+/**********************************************************************/
+
+proc (0) =  prt5();
+print "Too many function evaluations; consider";
+print "increasing maxevl or eps, or decreasing";
+print "nt or rt. These results are likely to be poor";
+endp;
+/**********************************************************************/
+
+proc (0) =  prt6(max);
+if (max);
+ print "though lower, point accepted";
+else;
+ print "though higher, point accepted";
+endif;
+endp;
+/**********************************************************************/
+
+proc (0) =  prt7(max);
+if (max);
+ print "lower point rejected";
+else;
+ print "higher point rejected";
+endif;
+endp;
+/**********************************************************************/
+
+proc (0) =  prt8(vm,xopt,x);
+
+
+
+endp;
+/**********************************************************************/
+
+proc (0) = prt9(max,t,xopt,vm,fopt,nup,ndown,nrej,lnobds,nnew);
+local totmov;
+totmov = nup + ndown + nrej;
+
+xopt'~fopt;
+
+endp;
+/**********************************************************************/
+
+proc (0) = prt10();
+print "SA achieved termination criteria. ier = 0";
+endp;
+
+/**********************************************************************/
+
+
+
